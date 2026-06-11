@@ -1,0 +1,10 @@
+# build artifacts
+/bin/
+*.exe
+
+# env files
+.env
+!.env.example
+
+# editor/OS
+.DS_Store
