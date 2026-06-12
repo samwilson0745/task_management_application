@@ -4,7 +4,8 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { useAuth } from "@/lib/auth-context";
-import { apiRequest, ApiError } from "@/lib/api";
+import { apiRequest, ApiError, API_URL } from "@/lib/api";
+import { useToast } from "@/lib/toast-context";
 import type { Task, TaskListResponse, TaskStatus } from "@/lib/types";
 import TaskCard from "@/components/TaskCard";
 
@@ -21,6 +22,7 @@ export default function TasksPage() {
 function TasksPageContent() {
   const { user, isLoading: authLoading } = useRequireAuth();
   const { token } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -29,6 +31,7 @@ function TasksPageContent() {
   const sortBy = searchParams.get("sort_by") || "created_at";
   const sortDir = searchParams.get("sort_dir") || "desc";
   const page = parseInt(searchParams.get("page") || "1", 10);
+  const scope = searchParams.get("scope") || "";
 
   const [searchInput, setSearchInput] = useState(search);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -64,6 +67,7 @@ function TasksPageContent() {
       if (sortDir) params.set("sort_dir", sortDir);
       params.set("page", String(page));
       params.set("page_size", String(PAGE_SIZE));
+      if (scope === "all" && user?.role === "admin") params.set("scope", "all");
 
       const resp = await apiRequest<TaskListResponse>(`/tasks/?${params.toString()}`, { token });
       setTasks(resp.data);
@@ -74,13 +78,38 @@ function TasksPageContent() {
     } finally {
       setLoading(false);
     }
-  }, [token, status, search, sortBy, sortDir, page]);
+  }, [token, status, search, sortBy, sortDir, page, scope, user]);
 
   useEffect(() => {
     if (!authLoading && user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchTasks();
     }
   }, [authLoading, user, fetchTasks]);
+
+  // Subscribe to live task updates via SSE and refresh the list when changes
+  // affect tasks visible on the current page.
+  useEffect(() => {
+    if (!token) return;
+    const url = `${API_URL}/tasks/stream?token=${encodeURIComponent(token)}`;
+    const source = new EventSource(url);
+
+    const handleChange = () => {
+      fetchTasks();
+    };
+
+    source.addEventListener("task.created", handleChange);
+    source.addEventListener("task.updated", handleChange);
+    source.addEventListener("task.deleted", handleChange);
+
+    source.onerror = () => {
+      // EventSource retries automatically; nothing to do here.
+    };
+
+    return () => {
+      source.close();
+    };
+  }, [token, fetchTasks]);
 
   // Debounce search input -> URL param
   useEffect(() => {
@@ -106,7 +135,9 @@ function TasksPageContent() {
       });
     } catch (err) {
       setTasks(previous);
-      setError(err instanceof ApiError ? err.message : "Failed to update task.");
+      const message = err instanceof ApiError ? err.message : "Failed to update task.";
+      setError(message);
+      showToast(message, "error");
     }
   };
 
@@ -117,10 +148,13 @@ function TasksPageContent() {
     setTasks((prev) => prev.filter((t) => t.id !== task.id));
     try {
       await apiRequest<void>(`/tasks/${task.id}`, { method: "DELETE", token });
+      showToast("Task deleted.");
       fetchTasks();
     } catch (err) {
       setTasks(previous);
-      setError(err instanceof ApiError ? err.message : "Failed to delete task.");
+      const message = err instanceof ApiError ? err.message : "Failed to delete task.";
+      setError(message);
+      showToast(message, "error");
     }
   };
 
@@ -131,10 +165,21 @@ function TasksPageContent() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold">Your Tasks</h1>
+        <h1 className="text-2xl font-semibold">{scope === "all" ? "All Users' Tasks" : "Your Tasks"}</h1>
+        {user.role === "admin" && (
+          <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <input
+              type="checkbox"
+              checked={scope === "all"}
+              onChange={(e) => updateParams({ scope: e.target.checked ? "all" : null, page: null })}
+              className="h-4 w-4 rounded border-zinc-300"
+            />
+            View all users&apos; tasks
+          </label>
+        )}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
         <input
           type="search"
           placeholder="Search by title..."
@@ -175,15 +220,15 @@ function TasksPageContent() {
       </div>
 
       {error && (
-        <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center text-zinc-500 py-12">Loading tasks...</div>
+        <div className="text-center text-zinc-500 py-12 dark:text-zinc-400">Loading tasks...</div>
       ) : tasks.length === 0 ? (
-        <div className="text-center text-zinc-500 py-12 border border-dashed border-zinc-300 rounded-lg">
+        <div className="text-center text-zinc-500 py-12 border border-dashed border-zinc-300 rounded-lg dark:border-zinc-700 dark:text-zinc-400">
           <p className="font-medium">No tasks found.</p>
           <p className="text-sm mt-1">
             {search || status
@@ -199,6 +244,7 @@ function TasksPageContent() {
               task={task}
               onToggleComplete={handleToggleComplete}
               onDelete={handleDelete}
+              readOnly={scope === "all" && task.user_id !== user.id}
             />
           ))}
         </ul>
@@ -206,21 +252,21 @@ function TasksPageContent() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-zinc-500">
+          <span className="text-zinc-500 dark:text-zinc-400">
             Page {page} of {totalPages} ({total} total)
           </span>
           <div className="flex gap-2">
             <button
               disabled={page <= 1}
               onClick={() => updateParams({ page: String(page - 1) })}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 disabled:opacity-50"
+              className="rounded-md border border-zinc-300 px-3 py-1.5 disabled:opacity-50 dark:border-zinc-600"
             >
               Previous
             </button>
             <button
               disabled={page >= totalPages}
               onClick={() => updateParams({ page: String(page + 1) })}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 disabled:opacity-50"
+              className="rounded-md border border-zinc-300 px-3 py-1.5 disabled:opacity-50 dark:border-zinc-600"
             >
               Next
             </button>

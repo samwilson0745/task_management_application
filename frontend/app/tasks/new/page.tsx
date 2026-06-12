@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest } from "@/lib/api";
+import { useToast } from "@/lib/toast-context";
 import type { Task } from "@/lib/types";
 import TaskForm, { TaskFormValues } from "@/components/TaskForm";
 
 export default function NewTaskPage() {
   const { user, isLoading } = useRequireAuth();
   const { token } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
 
   if (isLoading || !user) {
@@ -28,6 +30,7 @@ export default function NewTaskPage() {
         due_date: values.due_date ? new Date(values.due_date).toISOString() : null,
       },
     });
+    showToast("Task created.");
     router.push("/tasks");
   };
 

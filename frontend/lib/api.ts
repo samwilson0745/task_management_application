@@ -1,6 +1,6 @@
 import type { ApiErrorBody } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 export class ApiError extends Error {
   status: number;
@@ -45,6 +45,32 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!res.ok) {
     const errBody = data as ApiErrorBody | undefined;
     throw new ApiError(res.status, errBody?.error || "Request failed", errBody?.details);
+  }
+
+  return data as T;
+}
+
+export async function apiUpload<T>(path: string, file: File, token: string | null): Promise<T> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : undefined;
+
+  if (!res.ok) {
+    const errBody = data as ApiErrorBody | undefined;
+    throw new ApiError(res.status, errBody?.error || "Upload failed", errBody?.details);
   }
 
   return data as T;

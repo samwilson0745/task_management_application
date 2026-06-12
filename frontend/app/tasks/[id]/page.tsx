@@ -5,12 +5,15 @@ import { useParams, useRouter } from "next/navigation";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { useAuth } from "@/lib/auth-context";
 import { apiRequest, ApiError } from "@/lib/api";
+import { useToast } from "@/lib/toast-context";
 import type { Task } from "@/lib/types";
 import TaskForm, { TaskFormValues } from "@/components/TaskForm";
+import TaskActivityAndAttachments from "@/components/TaskActivityAndAttachments";
 
 export default function EditTaskPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
   const { token } = useAuth();
+  const { showToast } = useToast();
   const router = useRouter();
   const params = useParams<{ id: string }>();
 
@@ -39,7 +42,7 @@ export default function EditTaskPage() {
 
   if (error || !task) {
     return (
-      <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
         {error || "Task not found."}
       </div>
     );
@@ -58,11 +61,13 @@ export default function EditTaskPage() {
         clear_due_date: !values.due_date,
       },
     });
+    showToast("Task updated.");
     router.push("/tasks");
   };
 
   const handleDelete = async () => {
     await apiRequest<void>(`/tasks/${task.id}`, { method: "DELETE", token });
+    showToast("Task deleted.");
     router.push("/tasks");
   };
 
@@ -70,6 +75,7 @@ export default function EditTaskPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Edit Task</h1>
       <TaskForm initial={task} submitLabel="Save changes" onSubmit={handleSubmit} onDelete={handleDelete} />
+      <TaskActivityAndAttachments taskId={task.id} token={token} />
     </div>
   );
 }

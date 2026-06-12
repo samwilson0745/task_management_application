@@ -32,18 +32,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem(TOKEN_KEY);
     if (!stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsLoading(false);
       return;
     }
 
+    let cancelled = false;
     setToken(stored);
     apiRequest<User>("/auth/me", { token: stored })
-      .then((u) => setUser(u))
-      .catch(() => {
-        localStorage.removeItem(TOKEN_KEY);
-        setToken(null);
+      .then((u) => {
+        if (!cancelled) setUser(u);
       })
-      .finally(() => setIsLoading(false));
+      .catch(() => {
+        if (!cancelled) {
+          localStorage.removeItem(TOKEN_KEY);
+          setToken(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleAuthResponse = (resp: AuthResponse) => {

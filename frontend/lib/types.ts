@@ -4,6 +4,7 @@ export type TaskPriority = "low" | "medium" | "high";
 export interface Task {
   id: string;
   user_id: string;
+  user_email?: string;
   title: string;
   description: string;
   status: TaskStatus;
@@ -30,6 +31,26 @@ export interface User {
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface TaskActivity {
+  id: string;
+  task_id: string;
+  user_id: string;
+  user_email?: string;
+  action: string;
+  details: string;
+  created_at: string;
 }
 
 export interface ApiErrorBody {
