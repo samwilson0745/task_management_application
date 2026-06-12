@@ -13,6 +13,7 @@ import (
 	"taskmanager/internal/migrations"
 	"taskmanager/internal/repository"
 	"taskmanager/internal/router"
+	"taskmanager/internal/sse"
 )
 
 func main() {
@@ -37,15 +38,20 @@ func main() {
 
 	userRepo := repository.NewUserRepository(pool)
 	taskRepo := repository.NewTaskRepository(pool)
+	activityRepo := repository.NewActivityRepository(pool)
+	attachmentRepo := repository.NewAttachmentRepository(pool)
 
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
-	taskHandler := handlers.NewTaskHandler(taskRepo)
+	hub := sse.NewHub()
+	taskHandler := handlers.NewTaskHandler(taskRepo, activityRepo, hub)
+	attachmentHandler := handlers.NewAttachmentHandler(taskRepo, attachmentRepo, cfg.StorageDir)
 
 	r := router.New(router.Deps{
-		JWTSecret:     cfg.JWTSecret,
-		AllowedOrigin: cfg.AllowedOrigin,
-		AuthHandler:   authHandler,
-		TaskHandler:   taskHandler,
+		JWTSecret:         cfg.JWTSecret,
+		AllowedOrigin:     cfg.AllowedOrigin,
+		AuthHandler:       authHandler,
+		TaskHandler:       taskHandler,
+		AttachmentHandler: attachmentHandler,
 	})
 
 	log.Printf("listening on :%s", cfg.Port)

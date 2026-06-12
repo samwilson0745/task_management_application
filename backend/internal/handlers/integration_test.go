@@ -14,10 +14,12 @@ import (
 	"taskmanager/internal/migrations"
 	"taskmanager/internal/repository"
 	"taskmanager/internal/router"
+	"taskmanager/internal/sse"
 )
 
 // These tests require a running PostgreSQL instance. Set TEST_DATABASE_URL to run them, e.g.:
-//   TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/taskmanager_test?sslmode=disable go test ./...
+//
+//	TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/taskmanager_test?sslmode=disable go test ./...
 func setupTestServer(t *testing.T) http.Handler {
 	t.Helper()
 
@@ -45,14 +47,19 @@ func setupTestServer(t *testing.T) http.Handler {
 	userRepo := repository.NewUserRepository(pool)
 	taskRepo := repository.NewTaskRepository(pool)
 
+	activityRepo := repository.NewActivityRepository(pool)
+	attachmentRepo := repository.NewAttachmentRepository(pool)
+
 	authHandler := handlers.NewAuthHandler(userRepo, "test-secret")
-	taskHandler := handlers.NewTaskHandler(taskRepo)
+	taskHandler := handlers.NewTaskHandler(taskRepo, activityRepo, sse.NewHub())
+	attachmentHandler := handlers.NewAttachmentHandler(taskRepo, attachmentRepo, t.TempDir())
 
 	return router.New(router.Deps{
-		JWTSecret:     "test-secret",
-		AllowedOrigin: "http://localhost:3000",
-		AuthHandler:   authHandler,
-		TaskHandler:   taskHandler,
+		JWTSecret:         "test-secret",
+		AllowedOrigin:     "http://localhost:3000",
+		AuthHandler:       authHandler,
+		TaskHandler:       taskHandler,
+		AttachmentHandler: attachmentHandler,
 	})
 }
 
@@ -280,5 +287,53 @@ func TestTaskListFilterSearchSortPagination(t *testing.T) {
 	rec = doRequest(t, h, http.MethodGet, "/tasks/?status=bogus", token, nil)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 for invalid status filter, got %d", rec.Code)
+	}
+}
+
+func TestTaskActivityLog(t *testing.T) {
+	h := setupTestServer(t)
+	token := signupAndLogin(t, h, "carol@example.com")
+
+	rec := doRequest(t, h, http.MethodPost, "/tasks/", token, map[string]string{
+		"title": "Write report",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create task: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var task struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &task)
+
+	rec = doRequest(t, h, http.MethodPatch, "/tasks/"+task.ID, token, map[string]string{
+		"status": "done",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update task: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doRequest(t, h, http.MethodGet, "/tasks/"+task.ID+"/activity", token, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get activity: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var activityResp struct {
+		Data []struct {
+			Action string `json:"action"`
+		} `json:"data"`
+	}
+	json.Unmarshal(rec.Body.Bytes(), &activityResp)
+	if len(activityResp.Data) != 2 {
+		t.Fatalf("expected 2 activity entries, got %d", len(activityResp.Data))
+	}
+	if activityResp.Data[0].Action != "updated" || activityResp.Data[1].Action != "created" {
+		t.Errorf("unexpected activity order/actions: %+v", activityResp.Data)
+	}
+
+	// Another user cannot view this task's activity.
+	otherToken := signupAndLogin(t, h, "dave@example.com")
+	rec = doRequest(t, h, http.MethodGet, "/tasks/"+task.ID+"/activity", otherToken, nil)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for other user's task activity, got %d", rec.Code)
 	}
 }

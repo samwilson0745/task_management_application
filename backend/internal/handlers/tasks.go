@@ -12,15 +12,24 @@ import (
 	"taskmanager/internal/middleware"
 	"taskmanager/internal/models"
 	"taskmanager/internal/repository"
+	"taskmanager/internal/sse"
 	"taskmanager/internal/validation"
 )
 
 type TaskHandler struct {
-	tasks *repository.TaskRepository
+	tasks    *repository.TaskRepository
+	activity *repository.ActivityRepository
+	hub      *sse.Hub
 }
 
-func NewTaskHandler(tasks *repository.TaskRepository) *TaskHandler {
-	return &TaskHandler{tasks: tasks}
+func NewTaskHandler(tasks *repository.TaskRepository, activity *repository.ActivityRepository, hub *sse.Hub) *TaskHandler {
+	return &TaskHandler{tasks: tasks, activity: activity, hub: hub}
+}
+
+// canAccess reports whether the requesting user may view the given task,
+// either as its owner or as an admin.
+func canAccess(task *models.Task, userID, role string) bool {
+	return task.UserID == userID || role == "admin"
 }
 
 type taskRequest struct {
@@ -41,7 +50,14 @@ type taskListResponse struct {
 
 func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserIDFromContext(r.Context())
+	role := middleware.UserRoleFromContext(r.Context())
 	q := r.URL.Query()
+
+	scope := q.Get("scope")
+	if scope == "all" && role != "admin" {
+		httpx.Error(w, http.StatusForbidden, "admin access required to view all users' tasks")
+		return
+	}
 
 	page, _ := strconv.Atoi(q.Get("page"))
 	pageSize, _ := strconv.Atoi(q.Get("page_size"))
@@ -78,6 +94,11 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 		PageSize: pageSize,
 	}
 
+	if scope == "all" {
+		filter.UserID = ""
+		filter.IncludeUserEmail = true
+	}
+
 	tasks, total, err := h.tasks.List(r.Context(), filter)
 	if err != nil {
 		httpx.Error(w, http.StatusInternalServerError, "failed to list tasks")
@@ -110,6 +131,7 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserIDFromContext(r.Context())
+	role := middleware.UserRoleFromContext(r.Context())
 	id := chi.URLParam(r, "id")
 
 	task, err := h.tasks.GetByID(r.Context(), id)
@@ -122,7 +144,7 @@ func (h *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if task.UserID != userID {
+	if task.UserID != userID && role != "admin" {
 		httpx.Error(w, http.StatusNotFound, "task not found")
 		return
 	}
@@ -189,6 +211,9 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, "failed to create task")
 		return
 	}
+
+	h.activity.Log(r.Context(), task.ID, userID, "created", "")
+	h.hub.Broadcast(sse.Event{Type: "task.created", Task: task, UserID: task.UserID})
 
 	httpx.JSON(w, http.StatusCreated, task)
 }
@@ -291,6 +316,9 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.activity.Log(r.Context(), task.ID, userID, "updated", "")
+	h.hub.Broadcast(sse.Event{Type: "task.updated", Task: task, UserID: task.UserID})
+
 	httpx.JSON(w, http.StatusOK, task)
 }
 
@@ -317,5 +345,43 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.hub.Broadcast(sse.Event{Type: "task.deleted", TaskID: id, UserID: existing.UserID})
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Activity returns the change history for a task, available to its owner or an admin.
+func (h *TaskHandler) Activity(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.UserIDFromContext(r.Context())
+	role := middleware.UserRoleFromContext(r.Context())
+	id := chi.URLParam(r, "id")
+
+	task, err := h.tasks.GetByID(r.Context(), id)
+	if err != nil {
+		if err == repository.ErrNotFound {
+			httpx.Error(w, http.StatusNotFound, "task not found")
+			return
+		}
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch task")
+		return
+	}
+	if !canAccess(task, userID, role) {
+		httpx.Error(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	entries, err := h.activity.ListByTask(r.Context(), id)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "failed to fetch activity")
+		return
+	}
+
+	httpx.JSON(w, http.StatusOK, map[string]interface{}{"data": entries})
+}
+
+// Stream subscribes the authenticated user to live task updates via SSE.
+func (h *TaskHandler) Stream(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.UserIDFromContext(r.Context())
+	role := middleware.UserRoleFromContext(r.Context())
+	h.hub.ServeHTTP(userID, role)(w, r)
 }

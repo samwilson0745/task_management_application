@@ -21,13 +21,14 @@ func NewTaskRepository(pool *pgxpool.Pool) *TaskRepository {
 }
 
 type TaskFilter struct {
-	UserID   string // empty for admin "all users" view
-	Status   string
-	Search   string
-	SortBy   string // due_date, priority, created_at
-	SortDir  string // asc, desc
-	Page     int
-	PageSize int
+	UserID           string // empty for admin "all users" view
+	Status           string
+	Search           string
+	SortBy           string // due_date, priority, created_at
+	SortDir          string // asc, desc
+	Page             int
+	PageSize         int
+	IncludeUserEmail bool // when true (admin "all users" view), join in the owner's email
 }
 
 var allowedSortColumns = map[string]string{
@@ -42,19 +43,19 @@ func (r *TaskRepository) List(ctx context.Context, f TaskFilter) ([]models.Task,
 	argN := 1
 
 	if f.UserID != "" {
-		conditions = append(conditions, fmt.Sprintf("user_id = $%d", argN))
+		conditions = append(conditions, fmt.Sprintf("tasks.user_id = $%d", argN))
 		args = append(args, f.UserID)
 		argN++
 	}
 
 	if f.Status != "" {
-		conditions = append(conditions, fmt.Sprintf("status = $%d", argN))
+		conditions = append(conditions, fmt.Sprintf("tasks.status = $%d", argN))
 		args = append(args, f.Status)
 		argN++
 	}
 
 	if f.Search != "" {
-		conditions = append(conditions, fmt.Sprintf("title ILIKE $%d", argN))
+		conditions = append(conditions, fmt.Sprintf("tasks.title ILIKE $%d", argN))
 		args = append(args, "%"+f.Search+"%")
 		argN++
 	}
@@ -93,14 +94,22 @@ func (r *TaskRepository) List(ctx context.Context, f TaskFilter) ([]models.Task,
 	}
 	offset := (page - 1) * limit
 
+	selectCols := "tasks.id, tasks.user_id, tasks.title, tasks.description, tasks.status, tasks.priority, tasks.due_date, tasks.created_at, tasks.updated_at"
+	join := ""
+	if f.IncludeUserEmail {
+		selectCols += ", users.email"
+		join = "LEFT JOIN users ON users.id = tasks.user_id"
+	}
+
 	query := fmt.Sprintf(`
-		SELECT id, user_id, title, description, status, priority, due_date, created_at, updated_at,
-			CASE priority WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END AS priority_rank
+		SELECT %s,
+			CASE tasks.priority WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END AS priority_rank
 		FROM tasks
 		%s
-		ORDER BY %s %s NULLS LAST, created_at DESC
+		%s
+		ORDER BY %s %s NULLS LAST, tasks.created_at DESC
 		LIMIT $%d OFFSET $%d
-	`, where, sortCol, sortDir, argN, argN+1)
+	`, selectCols, join, where, sortCol, sortDir, argN, argN+1)
 
 	args = append(args, limit, offset)
 
@@ -114,9 +123,16 @@ func (r *TaskRepository) List(ctx context.Context, f TaskFilter) ([]models.Task,
 	for rows.Next() {
 		var t models.Task
 		var priorityRank int
-		if err := rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Description, &t.Status, &t.Priority,
-			&t.DueDate, &t.CreatedAt, &t.UpdatedAt, &priorityRank); err != nil {
-			return nil, 0, fmt.Errorf("scanning task: %w", err)
+		if f.IncludeUserEmail {
+			if err := rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Description, &t.Status, &t.Priority,
+				&t.DueDate, &t.CreatedAt, &t.UpdatedAt, &t.UserEmail, &priorityRank); err != nil {
+				return nil, 0, fmt.Errorf("scanning task: %w", err)
+			}
+		} else {
+			if err := rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Description, &t.Status, &t.Priority,
+				&t.DueDate, &t.CreatedAt, &t.UpdatedAt, &priorityRank); err != nil {
+				return nil, 0, fmt.Errorf("scanning task: %w", err)
+			}
 		}
 		tasks = append(tasks, t)
 	}

@@ -43,9 +43,31 @@ func (p TaskPriority) Valid() bool {
 	return false
 }
 
+type TaskActivity struct {
+	ID        string    `json:"id"`
+	TaskID    string    `json:"task_id"`
+	UserID    string    `json:"user_id"`
+	UserEmail *string   `json:"user_email,omitempty"`
+	Action    string    `json:"action"`
+	Details   string    `json:"details"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type TaskAttachment struct {
+	ID          string    `json:"id"`
+	TaskID      string    `json:"task_id"`
+	UserID      string    `json:"user_id"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"content_type"`
+	SizeBytes   int64     `json:"size_bytes"`
+	StoragePath string    `json:"-"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type Task struct {
 	ID          string       `json:"id"`
 	UserID      string       `json:"user_id"`
+	UserEmail   *string      `json:"user_email,omitempty"`
 	Title       string       `json:"title"`
 	Description string       `json:"description"`
 	Status      TaskStatus   `json:"status"`

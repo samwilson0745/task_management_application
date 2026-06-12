@@ -12,10 +12,11 @@ import (
 )
 
 type Deps struct {
-	JWTSecret     string
-	AllowedOrigin string
-	AuthHandler   *handlers.AuthHandler
-	TaskHandler   *handlers.TaskHandler
+	JWTSecret         string
+	AllowedOrigin     string
+	AuthHandler       *handlers.AuthHandler
+	TaskHandler       *handlers.TaskHandler
+	AttachmentHandler *handlers.AttachmentHandler
 }
 
 func New(d Deps) http.Handler {
@@ -52,9 +53,16 @@ func New(d Deps) http.Handler {
 		r.Use(middleware.Auth(d.JWTSecret))
 		r.Get("/", d.TaskHandler.List)
 		r.Post("/", d.TaskHandler.Create)
+		r.Get("/stream", d.TaskHandler.Stream)
 		r.Get("/{id}", d.TaskHandler.Get)
 		r.Patch("/{id}", d.TaskHandler.Update)
 		r.Delete("/{id}", d.TaskHandler.Delete)
+		r.Get("/{id}/activity", d.TaskHandler.Activity)
+
+		r.Get("/{id}/attachments", d.AttachmentHandler.List)
+		r.Post("/{id}/attachments", d.AttachmentHandler.Upload)
+		r.Get("/{id}/attachments/{attachmentID}", d.AttachmentHandler.Download)
+		r.Delete("/{id}/attachments/{attachmentID}", d.AttachmentHandler.Delete)
 	})
 
 	return r

@@ -10,6 +10,7 @@ type Config struct {
 	DatabaseURL   string
 	JWTSecret     string
 	AllowedOrigin string
+	StorageDir    string
 }
 
 func Load() (*Config, error) {
@@ -18,6 +19,7 @@ func Load() (*Config, error) {
 		DatabaseURL:   os.Getenv("DATABASE_URL"),
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 		AllowedOrigin: getEnv("ALLOWED_ORIGIN", "http://localhost:3000"),
+		StorageDir:    getEnv("STORAGE_DIR", "./data/attachments"),
 	}
 
 	if cfg.DatabaseURL == "" {
