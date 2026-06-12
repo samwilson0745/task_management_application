@@ -10,7 +10,9 @@ In addition to the core requirements, this app includes the following bonus feat
 - **Real-time updates** — task changes are pushed live to the UI via Server-Sent Events (SSE).
 - **Optimistic UI** — toggling, creating, editing, and deleting tasks update the UI
   immediately, with automatic rollback and a toast notification if the request fails.
-- **Task attachments** — upload, download, and delete files (max 10MB) attached to a task.
+- **Task attachments** — attach files (max 10MB) when creating a task or from the task
+  detail page; attachments are previewable inline (images/PDFs/text) or downloadable
+  directly from the task card, and can be deleted.
 - **Activity log** — each task records a history of create/update events with the
   acting user and timestamp.
 - **Dark mode** — a toggle in the navbar with the preference persisted in `localStorage`.
@@ -89,6 +91,36 @@ npm run dev
 
 The app will be available at `http://localhost:3000`.
 
+## Deploying (Free Tier)
+
+### Backend + DB on Render
+
+A `render.yaml` blueprint is included. In the Render dashboard, choose
+**New > Blueprint**, point it at this repo, and it will provision:
+
+- A free PostgreSQL database
+- The API as a Docker web service (built from `backend/Dockerfile`)
+- A generated `JWT_SECRET`
+
+Note: Render's free tier doesn't support persistent disks, so uploaded
+attachments are stored on the container's ephemeral filesystem and will be
+lost on redeploy/restart. For persistent attachments, upgrade to a paid plan
+with a disk, or switch attachment storage to an object store like S3.
+
+After creation, update the `ALLOWED_ORIGIN` env var on the API service to
+your deployed frontend URL (e.g. `https://your-app.vercel.app`).
+
+### Frontend on Vercel
+
+Import this repo into Vercel, set the project root to `frontend/`, and add
+the environment variable:
+
+```
+NEXT_PUBLIC_API_URL=https://your-api.onrender.com
+```
+
+Vercel will build and deploy the Next.js app automatically on every push.
+
 ## Environment Variables
 
 ### Backend (`backend/.env.example`)
@@ -132,7 +164,7 @@ All `/tasks` routes require an `Authorization: Bearer <token>` header.
 | GET    | `/tasks/:id/activity` | List the change history for a task |
 | GET    | `/tasks/:id/attachments` | List attachments for a task |
 | POST   | `/tasks/:id/attachments` | Upload a file attachment (multipart `file` field, max 10MB) |
-| GET    | `/tasks/:id/attachments/:attachmentID` | Download an attachment |
+| GET    | `/tasks/:id/attachments/:attachmentID` | View/download an attachment (served inline, so browsers preview images/PDFs/text) |
 | DELETE | `/tasks/:id/attachments/:attachmentID` | Delete an attachment |
 
 #### `GET /tasks` query parameters
