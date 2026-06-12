@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { useAuth } from "@/lib/auth-context";
-import { apiRequest } from "@/lib/api";
+import { apiRequest, apiUpload } from "@/lib/api";
 import { useToast } from "@/lib/toast-context";
 import type { Task } from "@/lib/types";
 import TaskForm, { TaskFormValues } from "@/components/TaskForm";
@@ -19,7 +19,7 @@ export default function NewTaskPage() {
   }
 
   const handleSubmit = async (values: TaskFormValues) => {
-    await apiRequest<Task>("/tasks/", {
+    const task = await apiRequest<Task>("/tasks/", {
       method: "POST",
       token,
       body: {
@@ -30,6 +30,17 @@ export default function NewTaskPage() {
         due_date: values.due_date ? new Date(values.due_date).toISOString() : null,
       },
     });
+
+    if (values.files && values.files.length > 0) {
+      for (const file of values.files) {
+        try {
+          await apiUpload(`/tasks/${task.id}/attachments`, file, token);
+        } catch {
+          showToast(`Failed to upload "${file.name}".`, "error");
+        }
+      }
+    }
+
     showToast("Task created.");
     router.push("/tasks");
   };

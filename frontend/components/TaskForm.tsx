@@ -9,6 +9,7 @@ export interface TaskFormValues {
   status: TaskStatus;
   priority: TaskPriority;
   due_date: string; // yyyy-mm-dd or ""
+  files?: File[];
 }
 
 interface TaskFormProps {
@@ -40,6 +41,7 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
   const [status, setStatus] = useState<TaskStatus>(initial?.status ?? "todo");
   const [priority, setPriority] = useState<TaskPriority>(initial?.priority ?? "medium");
   const [dueDate, setDueDate] = useState(toDateInputValue(initial?.due_date ?? null));
+  const [files, setFiles] = useState<File[]>([]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
 
     setSubmitting(true);
     try {
-      await onSubmit({ title: title.trim(), description: description.trim(), status, priority, due_date: dueDate });
+      await onSubmit({ title: title.trim(), description: description.trim(), status, priority, due_date: dueDate, files });
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -193,6 +195,38 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
           {errors.due_date && <p className="mt-1 text-sm text-red-600">{errors.due_date}</p>}
         </div>
       </div>
+
+      {!initial && (
+        <div>
+          <label htmlFor="files" className="block text-sm font-medium text-zinc-700 mb-1 dark:text-zinc-300">
+            Attachments
+          </label>
+          <input
+            id="files"
+            type="file"
+            multiple
+            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            className="block w-full text-sm text-zinc-700 dark:text-zinc-300 file:mr-3 file:rounded-md file:border file:border-zinc-300 file:bg-zinc-50 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-zinc-700 file:cursor-pointer hover:file:bg-zinc-100 dark:file:border-zinc-600 dark:file:bg-zinc-800 dark:file:text-zinc-200 dark:hover:file:bg-zinc-700"
+          />
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Max 10MB per file. Uploaded after the task is created.</p>
+          {files.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {files.map((file, i) => (
+                <li key={i} className="flex items-center justify-between gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+                  <span className="truncate" title={file.name}>{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="text-xs text-red-600 hover:underline shrink-0"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {submitError && (
         <p role="alert" className="text-sm text-red-600">

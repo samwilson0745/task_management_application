@@ -244,6 +244,7 @@ function TasksPageContent() {
               task={task}
               onToggleComplete={handleToggleComplete}
               onDelete={handleDelete}
+              token={token}
               readOnly={scope === "all" && task.user_id !== user.id}
             />
           ))}
