@@ -111,9 +111,9 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5 max-w-xl rounded-lg border border-zinc-200 bg-white p-6 shadow-sm" noValidate>
+    <form onSubmit={handleSubmit} className="space-y-5 max-w-xl rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900" noValidate>
       <div>
-        <label htmlFor="title" className="block text-sm font-medium text-zinc-700 mb-1">
+        <label htmlFor="title" className="block text-sm font-medium text-zinc-700 mb-1 dark:text-zinc-300">
           Title <span className="text-red-500">*</span>
         </label>
         <input
@@ -129,7 +129,7 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
       </div>
 
       <div>
-        <label htmlFor="description" className="block text-sm font-medium text-zinc-700 mb-1">
+        <label htmlFor="description" className="block text-sm font-medium text-zinc-700 mb-1 dark:text-zinc-300">
           Description
         </label>
         <textarea
@@ -146,7 +146,7 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
-          <label htmlFor="status" className="block text-sm font-medium text-zinc-700 mb-1">
+          <label htmlFor="status" className="block text-sm font-medium text-zinc-700 mb-1 dark:text-zinc-300">
             Status
           </label>
           <select
@@ -162,7 +162,7 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
         </div>
 
         <div>
-          <label htmlFor="priority" className="block text-sm font-medium text-zinc-700 mb-1">
+          <label htmlFor="priority" className="block text-sm font-medium text-zinc-700 mb-1 dark:text-zinc-300">
             Priority
           </label>
           <select
@@ -178,7 +178,7 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
         </div>
 
         <div>
-          <label htmlFor="due_date" className="block text-sm font-medium text-zinc-700 mb-1">
+          <label htmlFor="due_date" className="block text-sm font-medium text-zinc-700 mb-1 dark:text-zinc-300">
             Due date
           </label>
           <input
@@ -204,7 +204,7 @@ export default function TaskForm({ initial, submitLabel, onSubmit, onDelete }: T
         <button
           type="submit"
           disabled={submitting || deleting}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
         >
           {submitting ? "Saving..." : submitLabel}
         </button>

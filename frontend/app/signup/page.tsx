@@ -69,9 +69,9 @@ export default function SignupPage() {
 
   return (
     <div className="flex flex-1 items-center justify-center">
-      <div className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="w-full max-w-sm rounded-lg border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
         <h1 className="text-xl font-semibold mb-1">Sign up</h1>
-        <p className="text-sm text-zinc-500 mb-6">Create an account to manage your tasks.</p>
+        <p className="text-sm text-zinc-500 mb-6 dark:text-zinc-400">Create an account to manage your tasks.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
@@ -137,15 +137,15 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
+            className="w-full rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
           >
             {submitting ? "Creating account..." : "Sign up"}
           </button>
         </form>
 
-        <p className="mt-4 text-sm text-zinc-500 text-center">
+        <p className="mt-4 text-sm text-zinc-500 text-center dark:text-zinc-400">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-zinc-900 hover:underline">
+          <Link href="/login" className="font-medium text-zinc-900 hover:underline dark:text-zinc-100">
             Log in
           </Link>
         </p>
