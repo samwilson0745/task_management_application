@@ -4,13 +4,13 @@ import "testing"
 
 func TestIsValidEmail(t *testing.T) {
 	cases := map[string]bool{
-		"user@example.com":     true,
-		"first.last@sub.co":    true,
-		"invalid":              false,
-		"missing-at.com":       false,
-		"@missing-local.com":   false,
-		"user@":                false,
-		"user@domain":          false,
+		"user@example.com":   true,
+		"first.last@sub.co":  true,
+		"invalid":            false,
+		"missing-at.com":     false,
+		"@missing-local.com": false,
+		"user@":              false,
+		"user@domain":        false,
 	}
 
 	for email, want := range cases {
@@ -22,11 +22,11 @@ func TestIsValidEmail(t *testing.T) {
 
 func TestIsBlank(t *testing.T) {
 	cases := map[string]bool{
-		"":        true,
-		"   ":     true,
-		"\t\n":    true,
-		"hello":   false,
-		"  hi  ":  false,
+		"":       true,
+		"   ":    true,
+		"\t\n":   true,
+		"hello":  false,
+		"  hi  ": false,
 	}
 
 	for input, want := range cases {
