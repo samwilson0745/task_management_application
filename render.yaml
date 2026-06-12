@@ -24,8 +24,4 @@ services:
       - key: ALLOWED_ORIGIN
         value: https://your-app.vercel.app
       - key: STORAGE_DIR
-        value: /data/attachments
-    disk:
-      name: attachments
-      mountPath: /data/attachments
-      sizeGB: 1
+        value: ./data/attachments
