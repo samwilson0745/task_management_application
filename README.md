@@ -4,6 +4,20 @@ A full-stack task management application with a Go REST API, PostgreSQL database
 Next.js frontend. Users can sign up, log in, and manage their own tasks with filtering,
 search, sorting, and pagination.
 
+In addition to the core requirements, this app includes the following bonus features:
+
+- **Role-based access** — admins can view (read-only) all users' tasks.
+- **Real-time updates** — task changes are pushed live to the UI via Server-Sent Events (SSE).
+- **Optimistic UI** — toggling, creating, editing, and deleting tasks update the UI
+  immediately, with automatic rollback and a toast notification if the request fails.
+- **Task attachments** — upload, download, and delete files (max 10MB) attached to a task.
+- **Activity log** — each task records a history of create/update events with the
+  acting user and timestamp.
+- **Dark mode** — a toggle in the navbar with the preference persisted in `localStorage`.
+- **Dockerized** — `docker compose up` runs the database, API, and frontend together.
+- **CI** — GitHub Actions runs backend Go tests (against a real Postgres service) and
+  frontend type-check/lint/tests/build on every push and PR.
+
 ## Tech Stack
 
 - **Frontend:** Next.js (App Router), TypeScript, Tailwind CSS
@@ -85,6 +99,7 @@ The app will be available at `http://localhost:3000`.
 | `DATABASE_URL`   | PostgreSQL connection string                   | `postgres://postgres:postgres@localhost:5432/taskmanager?sslmode=disable`    |
 | `JWT_SECRET`     | Secret used to sign JWTs                       | _(required)_                                                                  |
 | `ALLOWED_ORIGIN` | Origin allowed for CORS (the frontend's URL)   | `http://localhost:3000`                                                       |
+| `STORAGE_DIR`    | Directory where uploaded task attachments are stored | `./data/attachments`                                                   |
 
 ### Frontend (`frontend/.env.example`)
 
@@ -113,6 +128,12 @@ All `/tasks` routes require an `Authorization: Bearer <token>` header.
 | GET    | `/tasks/:id` | Fetch a single task           |
 | PATCH  | `/tasks/:id` | Update a task                 |
 | DELETE | `/tasks/:id` | Delete a task                 |
+| GET    | `/tasks/stream` | SSE stream of live task changes (`task.created`, `task.updated`, `task.deleted`) |
+| GET    | `/tasks/:id/activity` | List the change history for a task |
+| GET    | `/tasks/:id/attachments` | List attachments for a task |
+| POST   | `/tasks/:id/attachments` | Upload a file attachment (multipart `file` field, max 10MB) |
+| GET    | `/tasks/:id/attachments/:attachmentID` | Download an attachment |
+| DELETE | `/tasks/:id/attachments/:attachmentID` | Delete an attachment |
 
 #### `GET /tasks` query parameters
 
@@ -122,8 +143,16 @@ All `/tasks` routes require an `Authorization: Bearer <token>` header.
 - `sort_dir` — `asc` or `desc` (default: `desc`)
 - `page` — page number, 1-indexed (default: `1`)
 - `page_size` — items per page, max 100 (default: `20`)
+- `scope=all` — **admin only**. Returns tasks for all users (each task includes the
+  owner's `user_email`). Returns `403` for non-admin users.
 
 Filtering, search, and sorting can be combined in a single request.
+
+#### Authenticating the SSE stream
+
+Browsers' `EventSource` API cannot set custom headers, so `GET /tasks/stream` and the
+attachment download endpoint also accept the JWT as a `?token=` query parameter in
+addition to the standard `Authorization: Bearer` header.
 
 #### Task fields
 
@@ -164,6 +193,16 @@ Validation errors (HTTP 422) additionally include a `details` map of field -> me
 - All `/tasks` routes are protected; users can only view, update, or delete tasks they own.
   Attempting to access another user's task returns `404 Not Found` (to avoid leaking the
   existence of other users' tasks).
+- **Admin role**: the `users.role` column defaults to `user`. An admin can view (read-only)
+  every user's tasks via `GET /tasks?scope=all` and `GET /tasks/:id`, but creating, updating,
+  and deleting are still restricted to the task's owner. There is no API to grant admin
+  access (to avoid a privilege-escalation surface) — promote a user manually:
+
+  ```sql
+  UPDATE users SET role = 'admin' WHERE email = 'someone@example.com';
+  ```
+
+  After promotion, the user sees a "View all users' tasks" toggle on the Tasks page.
 
 ## Testing
 
@@ -176,8 +215,9 @@ go test ./...
 
 Unit tests cover password hashing, JWT generation/parsing, and input validation helpers.
 
-Integration tests for the HTTP handlers (signup/login, task CRUD, ownership checks, and
-filter/search/sort/pagination) require a running PostgreSQL instance. Run them with:
+Integration tests for the HTTP handlers (signup/login, task CRUD, ownership checks,
+filter/search/sort/pagination, and the activity log) require a running PostgreSQL instance.
+Run them with:
 
 ```bash
 TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/taskmanager_test?sslmode=disable" go test ./...
@@ -192,6 +232,14 @@ npm test
 
 Tests cover the API client (success, error, and 204 responses) and the task form
 (client-side validation and submission).
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+- **Backend job**: spins up a Postgres service container, then runs `go build`, `go vet`,
+  and `go test ./...` (including the integration tests) against it.
+- **Frontend job**: runs `tsc --noEmit`, `eslint`, `vitest`, and `next build`.
 
 ## Assumptions & Trade-offs
 
@@ -211,3 +259,13 @@ Tests cover the API client (success, error, and 204 responses) and the task form
 - **Pagination** is offset-based (`page`/`page_size`), capped at 100 items per page.
 - Migrations run automatically on backend startup rather than via a separate CLI step, to
   keep local setup to a single command.
+- **Attachments** are stored on the local filesystem (under `STORAGE_DIR`, persisted via a
+  Docker volume in `docker-compose.yml`) rather than an object store like S3, to keep the
+  setup self-contained. Files are capped at 10MB and stored under a randomly generated
+  filename per task to avoid path traversal/collisions.
+- **Real-time updates** use Server-Sent Events (one-way server -> client) rather than
+  WebSockets, since the client never needs to push data over this channel — SSE is simpler
+  and works over plain HTTP with automatic reconnection built into `EventSource`.
+- **Activity log** currently records `created` and `updated` actions (task deletion removes
+  the task and its activity rows via `ON DELETE CASCADE`, so there is no "deleted" entry to
+  show).
