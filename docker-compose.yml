@@ -28,8 +28,11 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/taskmanager?sslmode=disable
       JWT_SECRET: change-me-to-a-random-secret
       ALLOWED_ORIGIN: http://localhost:3000
+      STORAGE_DIR: /data/attachments
     ports:
       - "8080:8080"
+    volumes:
+      - attachments_data:/data/attachments
 
   web:
     build:
@@ -46,3 +49,4 @@ services:
 
 volumes:
   db_data:
+  attachments_data:

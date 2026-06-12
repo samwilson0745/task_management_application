@@ -7,6 +7,7 @@ RUN CGO_ENABLED=0 go build -o /bin/api ./cmd/api
 
 FROM alpine:3.20
 RUN adduser -D -u 10001 appuser
+RUN mkdir -p /data/attachments && chown -R appuser:appuser /data
 COPY --from=build /bin/api /usr/local/bin/api
 USER appuser
 EXPOSE 8080
