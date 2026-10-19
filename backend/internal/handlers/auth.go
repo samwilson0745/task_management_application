@@ -12,7 +12,10 @@ import (
 	"taskmanager/internal/validation"
 )
 
-const tokenTTL = 7 * 24 * time.Hour
+const (
+	tokenTTL  = 7 * 24 * time.Hour
+	ticketTTL = 30 * time.Second
+)
 
 type AuthHandler struct {
 	users     *repository.UserRepository
@@ -139,4 +142,24 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	}
 
 	httpx.JSON(w, http.StatusOK, userPayload{ID: user.ID, Email: user.Email, Role: user.Role})
+}
+
+// Ticket issues a short-lived, single-purpose token for opening the SSE stream,
+// so the long-lived session JWT never appears in a URL.
+func (h *AuthHandler) Ticket(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.UserIDFromContext(r.Context())
+	user, err := h.users.GetByID(r.Context(), userID)
+	if err != nil {
+		httpx.Error(w, http.StatusUnauthorized, "user not found")
+		return
+	}
+	ticket, err := auth.GenerateTicket(h.jwtSecret, user.ID, user.Email, user.Role, ticketTTL)
+	if err != nil {
+		httpx.Error(w, http.StatusInternalServerError, "failed to generate ticket")
+		return
+	}
+	httpx.JSON(w, http.StatusOK, map[string]interface{}{
+		"ticket":     ticket,
+		"expires_in": int(ticketTTL.Seconds()),
+	})
 }

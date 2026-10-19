@@ -69,3 +69,25 @@ func TestParseExpiredToken(t *testing.T) {
 		t.Fatal("expected error for expired token, got nil")
 	}
 }
+
+func TestTicketAndSessionTokensAreNotInterchangeable(t *testing.T) {
+	session, _ := GenerateToken("s", "u1", "a@b.c", "user", time.Minute)
+	ticket, _ := GenerateTicket("s", "u1", "a@b.c", "user", time.Minute)
+
+	if _, err := ParseToken("s", session); err != nil {
+		t.Errorf("session token should parse: %v", err)
+	}
+	if _, err := ParseTicket("s", ticket); err != nil {
+		t.Errorf("ticket should parse: %v", err)
+	}
+	if _, err := ParseToken("s", ticket); err == nil {
+		t.Error("ticket must not be accepted as a session token")
+	}
+	if _, err := ParseTicket("s", session); err == nil {
+		t.Error("session token must not be accepted as a ticket")
+	}
+	expired, _ := GenerateTicket("s", "u1", "a@b.c", "user", -time.Minute)
+	if _, err := ParseTicket("s", expired); err == nil {
+		t.Error("expired ticket must be rejected")
+	}
+}

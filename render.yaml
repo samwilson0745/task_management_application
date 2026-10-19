@@ -23,5 +23,3 @@ services:
         generateValue: true
       - key: ALLOWED_ORIGIN
         value: https://your-app.vercel.app
-      - key: STORAGE_DIR
-        value: ./data/attachments

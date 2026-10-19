@@ -2,9 +2,6 @@
 /bin/
 *.exe
 
-# uploaded attachments (local dev storage)
-/data/
-
 # env files
 .env
 !.env.example

@@ -9,6 +9,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"taskmanager/internal/db"
 	"taskmanager/internal/handlers"
 	"taskmanager/internal/migrations"
@@ -20,6 +22,11 @@ import (
 // These tests require a running PostgreSQL instance. Set TEST_DATABASE_URL to run them, e.g.:
 //
 //	TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/taskmanager_test?sslmode=disable go test ./...
+//
+// testPool is the pool behind the most recent setupTestServer, for tests that
+// need to seed data directly (e.g. promoting an admin).
+var testPool *pgxpool.Pool
+
 func setupTestServer(t *testing.T) http.Handler {
 	t.Helper()
 
@@ -34,6 +41,7 @@ func setupTestServer(t *testing.T) http.Handler {
 		t.Fatalf("connecting to test database: %v", err)
 	}
 	t.Cleanup(pool.Close)
+	testPool = pool
 
 	if err := db.Migrate(ctx, pool, migrations.FS); err != nil {
 		t.Fatalf("running migrations: %v", err)
@@ -52,7 +60,7 @@ func setupTestServer(t *testing.T) http.Handler {
 
 	authHandler := handlers.NewAuthHandler(userRepo, "test-secret")
 	taskHandler := handlers.NewTaskHandler(taskRepo, activityRepo, sse.NewHub())
-	attachmentHandler := handlers.NewAttachmentHandler(taskRepo, attachmentRepo, t.TempDir())
+	attachmentHandler := handlers.NewAttachmentHandler(taskRepo, attachmentRepo)
 
 	return router.New(router.Deps{
 		JWTSecret:         "test-secret",

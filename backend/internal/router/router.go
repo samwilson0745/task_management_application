@@ -46,23 +46,28 @@ func New(d Deps) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Auth(d.JWTSecret))
 			r.Get("/me", d.AuthHandler.Me)
+			r.Post("/ticket", d.AuthHandler.Ticket)
 		})
 	})
 
 	r.Route("/tasks", func(r chi.Router) {
-		r.Use(middleware.Auth(d.JWTSecret))
-		r.Get("/", d.TaskHandler.List)
-		r.Post("/", d.TaskHandler.Create)
-		r.Get("/stream", d.TaskHandler.Stream)
-		r.Get("/{id}", d.TaskHandler.Get)
-		r.Patch("/{id}", d.TaskHandler.Update)
-		r.Delete("/{id}", d.TaskHandler.Delete)
-		r.Get("/{id}/activity", d.TaskHandler.Activity)
+		// EventSource cannot set headers, so the stream also accepts a short-lived ticket.
+		r.With(middleware.TicketAuth(d.JWTSecret)).Get("/stream", d.TaskHandler.Stream)
 
-		r.Get("/{id}/attachments", d.AttachmentHandler.List)
-		r.Post("/{id}/attachments", d.AttachmentHandler.Upload)
-		r.Get("/{id}/attachments/{attachmentID}", d.AttachmentHandler.Download)
-		r.Delete("/{id}/attachments/{attachmentID}", d.AttachmentHandler.Delete)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.Auth(d.JWTSecret))
+			r.Get("/", d.TaskHandler.List)
+			r.Post("/", d.TaskHandler.Create)
+			r.Get("/{id}", d.TaskHandler.Get)
+			r.Patch("/{id}", d.TaskHandler.Update)
+			r.Delete("/{id}", d.TaskHandler.Delete)
+			r.Get("/{id}/activity", d.TaskHandler.Activity)
+
+			r.Get("/{id}/attachments", d.AttachmentHandler.List)
+			r.Post("/{id}/attachments", d.AttachmentHandler.Upload)
+			r.Get("/{id}/attachments/{attachmentID}", d.AttachmentHandler.Download)
+			r.Delete("/{id}/attachments/{attachmentID}", d.AttachmentHandler.Delete)
+		})
 	})
 
 	return r

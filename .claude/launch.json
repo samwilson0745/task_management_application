@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd backend && DATABASE_URL='postgres://postgres:postgres@localhost:55433/taskmanager?sslmode=disable' JWT_SECRET=dev-secret-for-local-check go run ./cmd/api"],
+      "port": 8080
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd frontend && npm run dev"],
+      "port": 3000
+    }
+  ]
+}

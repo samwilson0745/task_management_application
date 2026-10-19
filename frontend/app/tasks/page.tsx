@@ -4,7 +4,8 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { useAuth } from "@/lib/auth-context";
-import { apiRequest, ApiError, API_URL } from "@/lib/api";
+import { apiRequest, ApiError } from "@/lib/api";
+import { connectTaskStream } from "@/lib/stream";
 import { useToast } from "@/lib/toast-context";
 import type { Task, TaskListResponse, TaskStatus } from "@/lib/types";
 import TaskCard from "@/components/TaskCard";
@@ -87,28 +88,10 @@ function TasksPageContent() {
     }
   }, [authLoading, user, fetchTasks]);
 
-  // Subscribe to live task updates via SSE and refresh the list when changes
-  // affect tasks visible on the current page.
+  // Subscribe to live task updates via SSE and refresh the list on any change.
   useEffect(() => {
     if (!token) return;
-    const url = `${API_URL}/tasks/stream?token=${encodeURIComponent(token)}`;
-    const source = new EventSource(url);
-
-    const handleChange = () => {
-      fetchTasks();
-    };
-
-    source.addEventListener("task.created", handleChange);
-    source.addEventListener("task.updated", handleChange);
-    source.addEventListener("task.deleted", handleChange);
-
-    source.onerror = () => {
-      // EventSource retries automatically; nothing to do here.
-    };
-
-    return () => {
-      source.close();
-    };
+    return connectTaskStream(token, fetchTasks);
   }, [token, fetchTasks]);
 
   // Debounce search input -> URL param

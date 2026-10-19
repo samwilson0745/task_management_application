@@ -15,3 +15,10 @@ func pgUniqueViolation(err error) bool {
 	}
 	return false
 }
+
+// isInvalidUUID reports a malformed-UUID parameter (SQLSTATE 22P02), which
+// should read as "not found" rather than a server error.
+func isInvalidUUID(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "22P02"
+}

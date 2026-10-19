@@ -44,7 +44,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecret)
 	hub := sse.NewHub()
 	taskHandler := handlers.NewTaskHandler(taskRepo, activityRepo, hub)
-	attachmentHandler := handlers.NewAttachmentHandler(taskRepo, attachmentRepo, cfg.StorageDir)
+	attachmentHandler := handlers.NewAttachmentHandler(taskRepo, attachmentRepo)
 
 	r := router.New(router.Deps{
 		JWTSecret:         cfg.JWTSecret,

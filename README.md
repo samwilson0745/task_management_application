@@ -102,10 +102,9 @@ A `render.yaml` blueprint is included. In the Render dashboard, choose
 - The API as a Docker web service (built from `backend/Dockerfile`)
 - A generated `JWT_SECRET`
 
-Note: Render's free tier doesn't support persistent disks, so uploaded
-attachments are stored on the container's ephemeral filesystem and will be
-lost on redeploy/restart. For persistent attachments, upgrade to a paid plan
-with a disk, or switch attachment storage to an object store like S3.
+Attachments are stored in PostgreSQL (`task_attachments.data`), so they survive
+restarts and redeploys on Render's free tier. Keep the 10MB cap in mind for database
+size; for large volumes, move storage to an object store like S3.
 
 After creation, update the `ALLOWED_ORIGIN` env var on the API service to
 your deployed frontend URL (e.g. `https://your-app.vercel.app`).
@@ -131,7 +130,6 @@ Vercel will build and deploy the Next.js app automatically on every push.
 | `DATABASE_URL`   | PostgreSQL connection string                   | `postgres://postgres:postgres@localhost:5432/taskmanager?sslmode=disable`    |
 | `JWT_SECRET`     | Secret used to sign JWTs                       | _(required)_                                                                  |
 | `ALLOWED_ORIGIN` | Origin allowed for CORS (the frontend's URL)   | `http://localhost:3000`                                                       |
-| `STORAGE_DIR`    | Directory where uploaded task attachments are stored | `./data/attachments`                                                   |
 
 ### Frontend (`frontend/.env.example`)
 
@@ -160,11 +158,12 @@ All `/tasks` routes require an `Authorization: Bearer <token>` header.
 | GET    | `/tasks/:id` | Fetch a single task           |
 | PATCH  | `/tasks/:id` | Update a task                 |
 | DELETE | `/tasks/:id` | Delete a task                 |
+| POST   | `/auth/ticket` | Issue a 30-second ticket for opening the SSE stream |
 | GET    | `/tasks/stream` | SSE stream of live task changes (`task.created`, `task.updated`, `task.deleted`) |
 | GET    | `/tasks/:id/activity` | List the change history for a task |
 | GET    | `/tasks/:id/attachments` | List attachments for a task |
 | POST   | `/tasks/:id/attachments` | Upload a file attachment (multipart `file` field, max 10MB) |
-| GET    | `/tasks/:id/attachments/:attachmentID` | View/download an attachment (served inline, so browsers preview images/PDFs/text) |
+| GET    | `/tasks/:id/attachments/:attachmentID` | View/download an attachment (images/PDFs/plain text preview inline; everything else downloads) |
 | DELETE | `/tasks/:id/attachments/:attachmentID` | Delete an attachment |
 
 #### `GET /tasks` query parameters
@@ -182,9 +181,22 @@ Filtering, search, and sorting can be combined in a single request.
 
 #### Authenticating the SSE stream
 
-Browsers' `EventSource` API cannot set custom headers, so `GET /tasks/stream` and the
-attachment download endpoint also accept the JWT as a `?token=` query parameter in
-addition to the standard `Authorization: Bearer` header.
+Browsers' `EventSource` cannot set custom headers, so `GET /tasks/stream` additionally
+accepts a **short-lived ticket** as `?ticket=`. Obtain one with `POST /auth/ticket`
+(authenticated with the normal `Authorization` header); it is valid for 30 seconds,
+only works on `/tasks/stream`, and cannot be used as a session token. Session JWTs are
+never accepted from the URL, and the frontend downloads attachments with a
+header-authenticated `fetch` rather than a link containing a token.
+
+#### Attachment handling
+
+- Contents are stored in Postgres. The content type is sniffed server-side; the
+  client-supplied type is ignored.
+- Only PNG/JPEG/GIF/WebP, PDF and plain text are served inline for preview. All other
+  types (including HTML and SVG) are forced to download as `application/octet-stream`,
+  with `X-Content-Type-Options: nosniff` and a sandboxing `Content-Security-Policy`.
+- Owners can upload, delete and read; admins are read-only (they get `404` on
+  upload/delete, consistent with the rest of the admin model).
 
 #### Task fields
 
@@ -291,10 +303,7 @@ Tests cover the API client (success, error, and 204 responses) and the task form
 - **Pagination** is offset-based (`page`/`page_size`), capped at 100 items per page.
 - Migrations run automatically on backend startup rather than via a separate CLI step, to
   keep local setup to a single command.
-- **Attachments** are stored on the local filesystem (under `STORAGE_DIR`, persisted via a
-  Docker volume in `docker-compose.yml`) rather than an object store like S3, to keep the
-  setup self-contained. Files are capped at 10MB and stored under a randomly generated
-  filename per task to avoid path traversal/collisions.
+- **Attachments** are stored as `BYTEA` in Postgres rather than on disk or in an object store, so they persist on hosts with ephemeral filesystems (e.g. Render free tier) with no extra service. Files are capped at 10MB. Attachments created before migration `0003` lived on disk, have no stored contents, and report 404.
 - **Real-time updates** use Server-Sent Events (one-way server -> client) rather than
   WebSockets, since the client never needs to push data over this channel — SSE is simpler
   and works over plain HTTP with automatic reconnection built into `EventSource`.

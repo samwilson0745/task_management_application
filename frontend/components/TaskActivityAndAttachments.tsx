@@ -1,7 +1,8 @@
 "use client";
 
 import { ChangeEvent, useEffect, useState } from "react";
-import { apiRequest, apiUpload, ApiError, API_URL } from "@/lib/api";
+import { apiRequest, apiUpload, ApiError } from "@/lib/api";
+import { openAttachment } from "@/lib/attachments";
 import { useToast } from "@/lib/toast-context";
 import type { TaskActivity, TaskAttachment } from "@/lib/types";
 
@@ -76,6 +77,14 @@ export default function TaskActivityAndAttachments({ taskId, token }: Props) {
     }
   };
 
+  const handleOpen = async (attachment: TaskAttachment) => {
+    try {
+      await openAttachment(taskId, attachment, token);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Failed to open attachment.", "error");
+    }
+  };
+
   const handleDelete = async (attachment: TaskAttachment) => {
     if (!confirm(`Delete "${attachment.filename}"?`)) return;
     const previous = attachments;
@@ -120,15 +129,14 @@ export default function TaskActivityAndAttachments({ taskId, token }: Props) {
           <ul className="mt-3 space-y-2">
             {attachments.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-2 text-sm">
-                <a
-                  href={`${API_URL}/tasks/${taskId}/attachments/${a.id}?token=${encodeURIComponent(token || "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="truncate text-zinc-700 hover:underline dark:text-zinc-300"
+                <button
+                  type="button"
+                  onClick={() => handleOpen(a)}
+                  className="truncate text-left text-zinc-700 hover:underline dark:text-zinc-300"
                   title={a.filename}
                 >
                   {a.filename}
-                </a>
+                </button>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-zinc-400">{formatBytes(a.size_bytes)}</span>
                   <button

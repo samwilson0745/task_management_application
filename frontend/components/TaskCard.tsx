@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { apiRequest, API_URL } from "@/lib/api";
+import { apiRequest, ApiError } from "@/lib/api";
+import { openAttachment } from "@/lib/attachments";
+import { useToast } from "@/lib/toast-context";
 import type { Task, TaskAttachment } from "@/lib/types";
 
 function formatBytes(bytes: number): string {
@@ -36,6 +38,15 @@ interface TaskCardProps {
 export default function TaskCard({ task, onToggleComplete, onDelete, togglingDisabled, readOnly, token }: TaskCardProps) {
   const isDone = task.status === "done";
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const { showToast } = useToast();
+
+  const handleOpen = async (attachment: TaskAttachment) => {
+    try {
+      await openAttachment(task.id, attachment, token ?? null);
+    } catch (err) {
+      showToast(err instanceof ApiError ? err.message : "Failed to open attachment.", "error");
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -88,15 +99,14 @@ export default function TaskCard({ task, onToggleComplete, onDelete, togglingDis
             <ul className="mt-2 space-y-1">
               {attachments.map((a) => (
                 <li key={a.id} className="text-xs">
-                  <a
-                    href={`${API_URL}/tasks/${task.id}/attachments/${a.id}?token=${encodeURIComponent(token || "")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => handleOpen(a)}
                     className="text-blue-600 hover:underline dark:text-blue-400"
                     title={a.filename}
                   >
                     📎 {a.filename}
-                  </a>
+                  </button>
                   <span className="text-zinc-400"> ({formatBytes(a.size_bytes)})</span>
                 </li>
               ))}

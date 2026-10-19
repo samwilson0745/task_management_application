@@ -60,7 +60,6 @@ type TaskAttachment struct {
 	Filename    string    `json:"filename"`
 	ContentType string    `json:"content_type"`
 	SizeBytes   int64     `json:"size_bytes"`
-	StoragePath string    `json:"-"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 
